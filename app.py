@@ -1,3 +1,16 @@
+from flask import Flask, request, jsonify
+import numpy as np
+import cv2
+
+from utils import segment_grains, measure_grain, ascii_bar_chart
+from classifier import classify_grain
+
+app = Flask(__name__)
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 @app.post("/analyze")
 def analyze():
     if "image" not in request.files:
@@ -14,14 +27,15 @@ def analyze():
     items = []
     breakdown = {"1121": 0, "1509": 0, "1847": 0, "Unknown": 0}
 
+    # حدود الصورة لاستخدامها في فلترة الشواذ
     H, W = bgr.shape[:2]
     img_area = H * W
 
     for c in contours:
-        # 1) قيسي خصائص الحبة
+        # قياس خصائص كل حبّة
         feats = measure_grain(c)
 
-        # 2) فلترة الكائنات الشاذة (كتل/ظلال/اندماج)
+        # فلترة الكائنات الشاذة (كتل/ظلال/اندماج)
         if (
             feats["length_px"] > 250 or
             feats["width_px"]  > 60  or
@@ -30,14 +44,16 @@ def analyze():
         ):
             continue
 
-        # 3) صنّفي الحبة
+        # تصنيف الحبّة
         label = classify_grain(feats)
         breakdown[label] = breakdown.get(label, 0) + 1
         items.append({"features": feats, "label": label})
 
     total = sum(breakdown.values())
-    percentages = {k: (0.0 if total == 0 else round(100.0 * v / total, 2))
-                   for k, v in breakdown.items()}
+    percentages = {
+        k: (0.0 if total == 0 else round(100.0 * v / total, 2))
+        for k, v in breakdown.items()
+    }
 
     majority = None
     mixture = "No"
@@ -58,3 +74,7 @@ def analyze():
         "per_grain": items,
         "chart": chart,
     })
+
+if __name__ == "__main__":
+    # تشغيل محلي
+    app.run(host="0.0.0.0", port=8000, debug=True)
