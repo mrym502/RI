@@ -1,0 +1,54 @@
+openapi: 3.1.0
+info:
+  title: Rice Analyzer API
+  version: 1.0.0
+servers:
+  - url: https://YOUR-DEPLOYED-DOMAIN/analyze
+    description: Production
+paths:
+  /:
+    post:
+      operationId: analyzeImage
+      summary: Analyze a rice image and return counts and class distribution.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+              required: [image]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_grains: { type: integer }
+                  majority: { type: string, nullable: true }
+                  mixture: { type: string }
+                  breakdown:
+                    type: object
+                    additionalProperties: { type: integer }
+                  percentages:
+                    type: object
+                    additionalProperties: { type: number }
+                  chart: { type: string }
+                  per_grain:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        label: { type: string }
+                        features:
+                          type: object
+                          properties:
+                            length_px: { type: number }
+                            width_px: { type: number }
+                            area_px: { type: number }
+                            aspect: { type: number }
