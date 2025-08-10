@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+import os
 import numpy as np
 import cv2
 
@@ -7,12 +8,28 @@ from classifier import classify_grain
 
 app = Flask(__name__)
 
+# ===== إعدادات عامة =====
+# حدّ أقصى لحجم الملف المرفوع (MB) — قابل للتغيير من Environment: MAX_UPLOAD_MB
+app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("MAX_UPLOAD_MB", "10")) * 1024 * 1024
+
+# عتبات فلترة الكائنات الشاذة — قابلة للتغيير من Environment
+TH_LEN_MAX       = float(os.getenv("TH_LEN_MAX", "250"))
+TH_WIDTH_MAX     = float(os.getenv("TH_WIDTH_MAX", "60"))
+TH_AREA_FRAC_MAX = float(os.getenv("TH_AREA_FRAC_MAX", "0.05"))  # نسبة من مساحة الصورة
+TH_ASPECT_MAX    = float(os.getenv("TH_ASPECT_MAX", "15"))
+
+# ===== Routes =====
+@app.get("/")
+def index():
+    return {"message": "Rice Analyzer API", "try": ["/health", "POST /analyze"]}
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
 @app.post("/analyze")
 def analyze():
+    # تحقق من وجود الملف
     if "image" not in request.files:
         return jsonify({"error": "Send form-data with key 'image'."}), 400
 
@@ -22,12 +39,13 @@ def analyze():
     if bgr is None:
         return jsonify({"error": "Invalid image."}), 400
 
+    # تجزئة الحبوب
     mask, contours = segment_grains(bgr)
 
     items = []
     breakdown = {"1121": 0, "1509": 0, "1847": 0, "Unknown": 0}
 
-    # حدود الصورة لاستخدامها في فلترة الشواذ
+    # أبعاد الصورة لاستخدامها في فلترة الشواذ
     H, W = bgr.shape[:2]
     img_area = H * W
 
@@ -37,10 +55,10 @@ def analyze():
 
         # فلترة الكائنات الشاذة (كتل/ظلال/اندماج)
         if (
-            feats["length_px"] > 250 or
-            feats["width_px"]  > 60  or
-            feats["area_px"]   > 0.05 * img_area or
-            feats["aspect"]    > 15
+            feats["length_px"] > TH_LEN_MAX or
+            feats["width_px"]  > TH_WIDTH_MAX or
+            feats["area_px"]   > TH_AREA_FRAC_MAX * img_area or
+            feats["aspect"]    > TH_ASPECT_MAX
         ):
             continue
 
@@ -50,11 +68,14 @@ def analyze():
         items.append({"features": feats, "label": label})
 
     total = sum(breakdown.values())
+
+    # النِّسَب المئوية
     percentages = {
         k: (0.0 if total == 0 else round(100.0 * v / total, 2))
         for k, v in breakdown.items()
     }
 
+    # الأغلبية ووجود الخليط
     majority = None
     mixture = "No"
     if total > 0:
@@ -74,6 +95,7 @@ def analyze():
         "per_grain": items,
         "chart": chart,
     })
+
 
 if __name__ == "__main__":
     # تشغيل محلي
