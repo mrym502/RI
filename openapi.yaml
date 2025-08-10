@@ -3,7 +3,7 @@ info:
   title: Rice Analyzer API
   version: 1.0.0
 servers:
-  - url: https://YOUR-DEPLOYED-DOMAIN/analyze
+  - url:  https://ri-nad4.onrender.com
     description: Production
 paths:
   /:
@@ -51,4 +51,5 @@ paths:
                             length_px: { type: number }
                             width_px: { type: number }
                             area_px: { type: number }
+
                             aspect: { type: number }
